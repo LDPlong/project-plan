@@ -10,6 +10,7 @@ O `git log` registra o que mudou no código. O `PLAN.md` registra o objetivo, os
 
 - Codex com suporte a `AGENTS.md` (aplicativo desktop ou CLI)
 - PowerShell 5.1 ou superior, apenas para os scripts
+- Versão 0.2.0; veja `CHANGELOG.md`
 
 ## Instalação
 
@@ -27,6 +28,14 @@ powershell -File scripts/install.ps1 -Target D:\path\to\skills\project-plan
 
 Também é possível copiar `skills/project-plan/` manualmente para o diretório de skills do Codex.
 
+### Configuração manual (sem skill)
+
+Se o skill não rodar, ou se você preferir não delegar ao agente, inicialize em três passos:
+
+1. Copie `skills/project-plan/references/PLAN-template.md` para `PLAN.md` na raiz do projeto e preencha.
+2. Acrescente `skills/project-plan/references/AGENTS-block.md` ao final do `AGENTS.md` do projeto; crie o arquivo se ele não existir.
+3. Execute `powershell -File skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md`.
+
 ## Uso
 
 ### 1. Inicializar um projeto
@@ -43,7 +52,7 @@ O skill executa os passos abaixo:
 2. Confirma o objetivo, o critério de conclusão e o que está fora do escopo. Só pergunta quando não consegue deduzir da conversa.
 3. Grava `PLAN.md` na raiz do projeto.
 4. Grava `references/AGENTS-block.md` no bloco marcado do `AGENTS.md`, substituindo um bloco existente.
-5. Verifica as seções, a quantidade de tarefas em andamento e o total de linhas efetivas.
+5. Executa o `scripts/check-plan.ps1` incluído contra o novo `PLAN.md`.
 
 ### 2. Trabalhar normalmente
 
@@ -52,16 +61,34 @@ No início da sessão, o Codex lê o `PLAN.md` e continua a partir do item em «
 ### 3. Verificar o plano (opcional)
 
 ```powershell
-powershell -File scripts/check-plan.ps1 -Path PLAN.md
+powershell -File skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md
 ```
 
 Saída de exemplo:
 
 ```text
-[OK] PLAN.md: 27/50 lines, in progress 1, todo 1
+[OK] PLAN.md: 29/50 lines, in progress 1, todo 1, warnings 0
 ```
 
-O script retorna o código de saída `1` quando falta uma seção obrigatória, o objetivo está vazio, há mais de uma tarefa em andamento ou o total de linhas efetivas passa de 50.
+O script verifica o seguinte.
+
+Falha (código de saída `1`):
+
+- Falta uma seção obrigatória: 目标 / 非目标 / 进行中 / 待做 / 决策 / 坑
+- Um título de seção aparece mais de uma vez
+- 目标 está vazio ou ainda é um placeholder
+- 进行中 tem duas ou mais tarefas não concluídas
+- As linhas não vazias passam de 50
+
+Avisos (o código de saída não muda):
+
+- Falta 当前里程碑
+- 进行中 não tem tarefas pendentes ou ainda contém `- [x]`
+- 待做 ainda contém `- [x]`
+- 目标 não contém "验收" nem "acceptance"
+- Há uma tarefa em andamento e o arquivo não é alterado há 14 dias (`-MaxAgeDays 0` desativa)
+
+"Linhas efetivas" significa linhas não vazias.
 
 ## Arquivos criados no projeto
 
@@ -116,27 +143,30 @@ M2 Autenticação de usuários
 | Regra | Valor |
 | --- | --- |
 | Tamanho da tarefa | Um commit |
-| Em andamento | No máximo um item |
-| Tamanho do arquivo | Até 50 linhas efetivas |
+| Em andamento | No máximo um item na branch principal |
+| Tamanho do arquivo | Até 50 linhas não vazias |
 | Decisões | Com data e motivo |
 | Tarefas concluídas | Uma linha de arquivo por marco |
-| Plano versus git | Prevalece o `git log` |
+| Acima do limite | Arquivar primeiro os marcos; depois mover decisões e problemas antigos para `docs/plan-archive.md` |
+| Branches | Cada branch mantém seu próprio «进行中»; a branch principal reduz para um item no merge |
+| Plano versus git | Fatos vêm do `git log`, intenção vem do `PLAN.md`; conflitos são confirmados manualmente |
 
 ## Estrutura do repositório
 
 ```text
-skills/project-plan/SKILL.md                      Procedimento de inicialização
-skills/project-plan/references/PLAN-template.md   Modelo do plano
-skills/project-plan/references/AGENTS-block.md    Bloco de regras gravado no AGENTS.md
-scripts/check-plan.ps1                            Verificação do plano
-scripts/install.ps1                               Instalação do skill
-.github/workflows/plan-check.yml                  CI: verificação em push e pull request
+skills/project-plan/SKILL.md                       Procedimento de inicialização
+skills/project-plan/references/PLAN-template.md    Modelo do plano
+skills/project-plan/references/AGENTS-block.md     Bloco de regras para AGENTS.md
+skills/project-plan/scripts/check-plan.ps1         Verificação do plano (incluída no skill)
+scripts/install.ps1                                Instalação e limpeza de arquivos removidos
+.github/workflows/plan-check.yml                   CI: verificação + aviso de plano desatualizado
+CHANGELOG.md                                       Histórico de versões
 ```
 
 ## Perguntas frequentes
 
 **O skill não foi executado.**
-Skills são selecionados pela descrição. Cite o nome explicitamente: «Inicialize o plano do projeto com o skill project-plan».
+Skills são selecionados pela descrição. Cite o nome explicitamente: «Inicialize o plano do projeto com o skill project-plan». Se ainda assim não rodar, use a configuração manual acima.
 
 **Uma sessão nova não lê o PLAN.md.**
 Confirme que o Codex inicia na raiz do projeto ou em um subdiretório e que o `AGENTS.md` contém o bloco entre `<!-- project-plan:begin -->` e `<!-- project-plan:end -->`. Também é possível adicionar uma linha de fallback em `~/.codex/AGENTS.md`:
@@ -152,7 +182,7 @@ Não. O bloco é adicionado ao final do arquivo e o restante permanece intacto. 
 Na raiz do projeto. Um arquivo por repositório. Não use um local global.
 
 **O PLAN.md deve ser commitado?**
-Sim. Ele faz parte do estado do projeto e deve ser revisado como o código.
+Sim. Ele faz parte do estado do projeto e deve ser revisado como o código. Em um repositório público, o plano também passa a fazer parte do histórico público; se isso não for aceitável, use um repositório privado ou adicione `PLAN.md` ao `.gitignore` (nesse caso o estado entre sessões existe apenas localmente).
 
 **Vários projetos podem compartilhar um plano?**
 Não. Cada raiz de projeto tem o seu próprio arquivo.

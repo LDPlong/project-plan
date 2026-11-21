@@ -10,6 +10,7 @@
 
 - 支持 `AGENTS.md` 的 Codex（桌面端或 CLI）
 - PowerShell 5.1 及以上（仅脚本需要）
+- 当前版本 0.2.0，变更见 `CHANGELOG.md`
 
 ## 安装
 
@@ -26,6 +27,14 @@ powershell -File scripts/install.ps1 -Target D:\path\to\skills\project-plan
 ```
 
 也可以手动把 `skills/project-plan/` 复制到 Codex 的 skills 目录。
+
+### 手动初始化（不依赖 skill）
+
+skill 没有触发，或者不想让 agent 代劳时，按下面三步初始化：
+
+1. 把 `skills/project-plan/references/PLAN-template.md` 复制为项目根目录的 `PLAN.md`，按模板填写。
+2. 把 `skills/project-plan/references/AGENTS-block.md` 整块追加到项目的 `AGENTS.md`；文件不存在就新建。
+3. 运行 `powershell -File skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md`。
 
 ## 使用
 
@@ -52,16 +61,34 @@ skill 依次执行：
 ### 3. 检查清单（可选）
 
 ```powershell
-powershell -File scripts/check-plan.ps1 -Path PLAN.md
+powershell -File skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md
 ```
 
 输出示例：
 
 ```text
-[OK] PLAN.md: 27/50 lines, in progress 1, todo 1
+[OK] PLAN.md: 29/50 lines, in progress 1, todo 1, warnings 0
 ```
 
-缺少章节、目标为空、进行中超过 1 条、有效行数超过 50 时，脚本返回退出码 `1`。
+脚本的检查项：
+
+失败（退出码 `1`）：
+
+- 缺少必需章节：目标 / 非目标 / 进行中 / 待做 / 决策 / 坑
+- 同一章节标题出现多次
+- 目标为空或仍是占位符
+- 进行中有 2 条及以上未完成任务
+- 非空行超过 50
+
+告警（不影响退出码）：
+
+- 缺少「当前里程碑」
+- 进行中没有未完成任务，或残留 `- [x]`
+- 待做残留 `- [x]`
+- 目标中没有「验收」或 acceptance
+- 进行中未完成时，文件超过 14 天没有更新（`-MaxAgeDays 0` 可关闭）
+
+「有效行数」指非空行数。
 
 ## 项目中生成的文件
 
@@ -116,21 +143,24 @@ M2 用户认证
 | 规则 | 取值 |
 | --- | --- |
 | 任务粒度 | 一条 commit |
-| 进行中 | 最多 1 条 |
-| 文件长度 | 有效行数不超过 50 |
+| 进行中 | 主线最多 1 条 |
+| 文件长度 | 非空行不超过 50 |
 | 决策 | 带日期和理由 |
 | 已完成任务 | 每个里程碑折成一行归档 |
-| 清单与 git 冲突 | 以 `git log` 为准 |
+| 超限处理 | 先归档里程碑，再把旧决策与坑移到 `docs/plan-archive.md` |
+| 多分支 | 各分支各自维护「进行中」，合并时由主线收敛为 1 条 |
+| 清单与 git 冲突 | 事实以 `git log` 为准，意图以 `PLAN.md` 为准，矛盾时人工确认 |
 
 ## 目录结构
 
 ```text
-skills/project-plan/SKILL.md                      初始化流程
-skills/project-plan/references/PLAN-template.md   清单模板
-skills/project-plan/references/AGENTS-block.md    写入 AGENTS.md 的规则块
-scripts/check-plan.ps1                            清单检查
-scripts/install.ps1                               安装 skill
-.github/workflows/plan-check.yml                  CI：push / PR 时运行检查
+skills/project-plan/SKILL.md                        初始化流程
+skills/project-plan/references/PLAN-template.md     清单模板
+skills/project-plan/references/AGENTS-block.md      写入 AGENTS.md 的规则块
+skills/project-plan/scripts/check-plan.ps1          清单检查（随 skill 分发）
+scripts/install.ps1                                 安装 skill，并清理已删除文件
+.github/workflows/plan-check.yml                    CI：清单检查 + 未更新告警
+CHANGELOG.md                                        版本记录
 ```
 
 ## 常见问题
@@ -152,7 +182,7 @@ skill 按描述匹配。直接点名：「用 project-plan 初始化这个项目
 项目根目录，一个仓库一份，不要放到全局目录。
 
 **PLAN.md 需要提交吗？**
-需要。它属于项目状态，应该和代码一样被 review。
+需要。它属于项目状态，应该和代码一样被 review。公开仓库里，规划内容也会进入公开历史；不希望公开时改用私有仓库，或把 `PLAN.md` 加入 `.gitignore`（此时跨对话状态只在本地生效）。
 
 **多个项目可以共用一份清单吗？**
 不可以。每个项目根目录各自一份。

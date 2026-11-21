@@ -10,6 +10,7 @@ Skill de Codex para conservar el estado de un proyecto entre sesiones. Se ejecut
 
 - Codex con soporte de `AGENTS.md` (aplicación de escritorio o CLI)
 - PowerShell 5.1 o superior, solo para los scripts
+- Versión 0.2.0; consulta `CHANGELOG.md`
 
 ## Instalación
 
@@ -27,6 +28,14 @@ powershell -File scripts/install.ps1 -Target D:\path\to\skills\project-plan
 
 También se puede copiar `skills/project-plan/` manualmente al directorio de skills de Codex.
 
+### Configuración manual (sin skill)
+
+Si el skill no se ejecuta, o prefieres no delegarlo al agente, inicializa el proyecto en tres pasos:
+
+1. Copia `skills/project-plan/references/PLAN-template.md` como `PLAN.md` en la raíz del proyecto y rellénalo.
+2. Añade `skills/project-plan/references/AGENTS-block.md` al final del `AGENTS.md` del proyecto; créalo si no existe.
+3. Ejecuta `powershell -File skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md`.
+
 ## Uso
 
 ### 1. Inicializar un proyecto
@@ -43,7 +52,7 @@ El skill hace lo siguiente:
 2. Confirma el objetivo, el criterio de finalización y lo que queda fuera de alcance. Solo pregunta cuando no puede deducirlo de la conversación.
 3. Escribe `PLAN.md` en la raíz del proyecto.
 4. Escribe `references/AGENTS-block.md` en el bloque marcado de `AGENTS.md` y sustituye el bloque anterior si existe.
-5. Verifica las secciones, el número de tareas en curso y el número de líneas efectivas.
+5. Ejecuta su `scripts/check-plan.ps1` incluido contra el nuevo `PLAN.md`.
 
 ### 2. Trabajar con normalidad
 
@@ -52,16 +61,34 @@ Al iniciar una sesión, Codex lee `PLAN.md` y continúa desde el elemento de «�
 ### 3. Comprobar el plan (opcional)
 
 ```powershell
-powershell -File scripts/check-plan.ps1 -Path PLAN.md
+powershell -File skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md
 ```
 
 Salida de ejemplo:
 
 ```text
-[OK] PLAN.md: 27/50 lines, in progress 1, todo 1
+[OK] PLAN.md: 29/50 lines, in progress 1, todo 1, warnings 0
 ```
 
-El script devuelve el código de salida `1` si falta una sección obligatoria, el objetivo está vacío, hay más de una tarea en curso o se superan las 50 líneas efectivas.
+El script comprueba lo siguiente.
+
+Falla (código de salida `1`):
+
+- Falta una sección obligatoria: 目标 / 非目标 / 进行中 / 待做 / 决策 / 坑
+- Un título de sección aparece más de una vez
+- 目标 está vacío o sigue siendo un marcador de posición
+- 进行中 tiene dos o más tareas sin completar
+- Las líneas no vacías superan 50
+
+Avisos (el código de salida no cambia):
+
+- Falta 当前里程碑
+- 进行中 no tiene tareas pendientes, o aún contiene `- [x]`
+- 待做 aún contiene `- [x]`
+- 目标 no contiene «验收» ni «acceptance»
+- Hay una tarea en curso y el archivo no se ha modificado en 14 días (`-MaxAgeDays 0` lo desactiva)
+
+«Líneas efectivas» significa líneas no vacías.
 
 ## Archivos que se crean en el proyecto
 
@@ -116,27 +143,30 @@ M2 Autenticación de usuarios
 | Regla | Valor |
 | --- | --- |
 | Tamaño de tarea | Un commit |
-| En curso | Como máximo un elemento |
-| Longitud del archivo | 50 líneas efectivas como máximo |
+| En curso | Como máximo un elemento en la rama principal |
+| Longitud del archivo | 50 líneas no vacías como máximo |
 | Decisiones | Con fecha y motivo |
 | Tareas terminadas | Una línea de archivo por hito |
-| Plan frente a git | Prevalece `git log` |
+| Por encima del límite | Archivar primero los hitos; después mover las decisiones y problemas antiguos a `docs/plan-archive.md` |
+| Ramas | Cada rama mantiene su propio «进行中»; la rama principal lo reduce a un elemento al fusionar |
+| Plan frente a git | Los hechos vienen de `git log`, la intención de `PLAN.md`; los conflictos se confirman manualmente |
 
 ## Estructura del repositorio
 
 ```text
-skills/project-plan/SKILL.md                      Procedimiento de inicialización
-skills/project-plan/references/PLAN-template.md   Plantilla del plan
-skills/project-plan/references/AGENTS-block.md    Bloque de reglas para AGENTS.md
-scripts/check-plan.ps1                            Comprobación del plan
-scripts/install.ps1                               Instalación del skill
-.github/workflows/plan-check.yml                  CI: comprobación en push y pull request
+skills/project-plan/SKILL.md                       Procedimiento de inicialización
+skills/project-plan/references/PLAN-template.md    Plantilla del plan
+skills/project-plan/references/AGENTS-block.md     Bloque de reglas para AGENTS.md
+skills/project-plan/scripts/check-plan.ps1         Comprobación del plan (incluida en el skill)
+scripts/install.ps1                                Instalación y limpieza de archivos eliminados
+.github/workflows/plan-check.yml                   CI: comprobación + aviso de plan sin actualizar
+CHANGELOG.md                                       Historial de versiones
 ```
 
 ## Preguntas frecuentes
 
 **El skill no se ejecuta.**
-Los skills se seleccionan por su descripción. Nómbralo de forma explícita: «Inicializa el plan del proyecto con el skill project-plan».
+Los skills se seleccionan por su descripción. Nómbralo de forma explícita: «Inicializa el plan del proyecto con el skill project-plan». Si aun así no se ejecuta, usa la configuración manual anterior.
 
 **Una sesión nueva no lee PLAN.md.**
 Comprueba que Codex se inicia en la raíz del proyecto o en un subdirectorio, y que `AGENTS.md` contiene el bloque entre `<!-- project-plan:begin -->` y `<!-- project-plan:end -->`. También puedes añadir una línea de respaldo en `~/.codex/AGENTS.md`:
@@ -152,7 +182,7 @@ No. El bloque se añade al final del archivo y el resto no se modifica. Al repet
 En la raíz del proyecto. Un archivo por repositorio. No lo pongas en una ubicación global.
 
 **¿Hay que hacer commit de PLAN.md?**
-Sí. Forma parte del estado del proyecto y debe revisarse como el código.
+Sí. Forma parte del estado del proyecto y debe revisarse como el código. En un repositorio público el plan también pasa a formar parte del historial público; si no es aceptable, usa un repositorio privado o añade `PLAN.md` a `.gitignore` (en ese caso el estado entre sesiones solo existe en local).
 
 **¿Varios proyectos pueden compartir un plan?**
 No. Cada raíz de proyecto tiene su propio archivo.

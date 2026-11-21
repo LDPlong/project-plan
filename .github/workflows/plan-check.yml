@@ -10,6 +10,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Validate PLAN.md
         shell: pwsh
-        run: ./scripts/check-plan.ps1 -Path PLAN.md
+        run: ./skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md
+      - name: Warn when code changed without a plan update
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -uo pipefail
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          code=$(printf '%s\n' "$changed" | grep -Ev '^(PLAN\.md$|README\.md$|docs/|LICENSE$|\.github/|CHANGELOG\.md$)' | grep -c . || true)
+          plan=$(printf '%s\n' "$changed" | grep -cx 'PLAN.md' || true)
+          if [ "${code:-0}" -gt 0 ] && [ "${plan:-0}" -eq 0 ]; then
+            echo "::warning::Source files changed but PLAN.md was not updated."
+          fi

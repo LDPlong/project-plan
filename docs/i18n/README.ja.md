@@ -10,6 +10,7 @@
 
 - `AGENTS.md` に対応した Codex（デスクトップ版または CLI）
 - PowerShell 5.1 以上（スクリプトを使う場合のみ）
+- バージョン 0.2.0（変更履歴は `CHANGELOG.md`）
 
 ## インストール
 
@@ -27,6 +28,14 @@ powershell -File scripts/install.ps1 -Target D:\path\to\skills\project-plan
 
 `skills/project-plan/` を Codex の skills ディレクトリへ手動でコピーしても構いません。
 
+### 手動セットアップ（skill を使わない）
+
+skill が実行されない場合や、agent に任せたくない場合は、次の 3 ステップで初期化できます。
+
+1. `skills/project-plan/references/PLAN-template.md` をプロジェクトのルートに `PLAN.md` としてコピーし、記入します。
+2. `skills/project-plan/references/AGENTS-block.md` をプロジェクトの `AGENTS.md` の末尾に追加します。ファイルがなければ作成します。
+3. `powershell -File skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md` を実行します。
+
 ## 使い方
 
 ### 1. プロジェクトの初期化
@@ -43,7 +52,7 @@ skill は次の順に処理します。
 2. 目標、完了条件、対象外を確認します。会話から読み取れない場合のみ質問します。
 3. プロジェクトのルートに `PLAN.md` を生成します。
 4. `references/AGENTS-block.md` を `AGENTS.md` のマーカーブロックへ書き込みます。既存のブロックは置き換えます。
-5. 章の有無、進行中タスクの数、有効行数を検査します。
+5. 同梱の `scripts/check-plan.ps1` を新しい `PLAN.md` に対して実行します。
 
 ### 2. 通常の作業
 
@@ -52,16 +61,34 @@ skill は次の順に処理します。
 ### 3. 計画の検査（任意）
 
 ```powershell
-powershell -File scripts/check-plan.ps1 -Path PLAN.md
+powershell -File skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md
 ```
 
 出力例：
 
 ```text
-[OK] PLAN.md: 27/50 lines, in progress 1, todo 1
+[OK] PLAN.md: 29/50 lines, in progress 1, todo 1, warnings 0
 ```
 
-必須の章がない、目標が空、進行中が 2 件以上、有効行数が 50 を超える場合、終了コード `1` を返します。
+検査内容は次のとおりです。
+
+失敗（終了コード `1`）：
+
+- 必須の章がない：目标 / 非目标 / 进行中 / 待做 / 决策 / 坑
+- 同じ章見出しが複数回出現する
+- 目标 が空、またはプレースホルダーのまま
+- 进行中 に未完了タスクが 2 件以上ある
+- 非空行が 50 行を超える
+
+警告（終了コードには影響しません）：
+
+- 当前里程碑 がない
+- 进行中 に未完了タスクがない、または `- [x]` が残っている
+- 待做 に `- [x]` が残っている
+- 目标 に「验收」または acceptance がない
+- 进行中 のタスクがある状態で、14 日以上更新されていない（`-MaxAgeDays 0` で無効化）
+
+「有效行数」は非空行数を指します。
 
 ## プロジェクト内に作られるファイル
 
@@ -116,27 +143,30 @@ M2 ユーザー認証
 | ルール | 値 |
 | --- | --- |
 | タスクの粒度 | commit 1 回分 |
-| 進行中 | 最大 1 件 |
-| ファイル長 | 有効行 50 行以内 |
+| 進行中 | メインブランチで最大 1 件 |
+| ファイル長 | 非空行 50 行以内 |
 | 判断 | 日付と理由を書く |
 | 完了タスク | マイルストーンごとに 1 行へ集約 |
-| 計画と git の不一致 | `git log` を優先 |
+| 上限超過 | 先にマイルストーンをアーカイブし、古い判断と落とし穴を `docs/plan-archive.md` へ移す |
+| ブランチ | 各ブランチが自分の「进行中」を管理し、マージ時にメインブランチで 1 件に収束させる |
+| 計画と git の不一致 | 事実は `git log`、意図は `PLAN.md`。矛盾は人が確認する |
 
 ## ディレクトリ構成
 
 ```text
-skills/project-plan/SKILL.md                      初期化手順
-skills/project-plan/references/PLAN-template.md   計画テンプレート
-skills/project-plan/references/AGENTS-block.md    AGENTS.md に書き込むルールブロック
-scripts/check-plan.ps1                            計画の検査
-scripts/install.ps1                               skill のインストール
-.github/workflows/plan-check.yml                  CI：push と pull request で検査
+skills/project-plan/SKILL.md                       初期化手順
+skills/project-plan/references/PLAN-template.md    計画テンプレート
+skills/project-plan/references/AGENTS-block.md     AGENTS.md に書き込むルールブロック
+skills/project-plan/scripts/check-plan.ps1         計画の検査（skill に同梱）
+scripts/install.ps1                                skill のインストールと不要ファイルの削除
+.github/workflows/plan-check.yml                   CI：計画検査 + 未更新の警告
+CHANGELOG.md                                       変更履歴
 ```
 
 ## FAQ
 
 **skill が実行されません。**
-skill は説明文で選択されます。「project-plan で計画リストを初期化してください」のように名前を明示してください。
+skill は説明文で選択されます。「project-plan で計画リストを初期化してください」のように名前を明示してください。それでも実行されない場合は、上記の手動セットアップを使ってください。
 
 **新しいセッションが PLAN.md を読みません。**
 Codex の作業ディレクトリがプロジェクトのルートかその配下にあること、`AGENTS.md` に `<!-- project-plan:begin -->` と `<!-- project-plan:end -->` のブロックがあることを確認してください。`~/.codex/AGENTS.md` に次の 1 行を追加する方法もあります。
@@ -152,7 +182,7 @@ Codex の作業ディレクトリがプロジェクトのルートかその配�
 プロジェクトのルートです。リポジトリごとに 1 ファイルとし、グローバルな場所には置かないでください。
 
 **PLAN.md は commit しますか。**
-はい。プロジェクト状態の一部として、コードと同じようにレビューしてください。
+はい。プロジェクト状態の一部として、コードと同じようにレビューしてください。公開リポジトリでは計画内容も公開履歴に残ります。それが困る場合はプライベートリポジトリを使うか、`PLAN.md` を `.gitignore` に追加してください（その場合、セッション間の状態はローカルにのみ残ります）。
 
 **複数のプロジェクトで 1 つの計画を共有できますか。**
 できません。プロジェクトのルートごとに 1 ファイルです。

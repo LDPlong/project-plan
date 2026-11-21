@@ -10,6 +10,7 @@
 
 - `AGENTS.md`를 지원하는 Codex(데스크톱 앱 또는 CLI)
 - PowerShell 5.1 이상(스크립트 사용 시)
+- 버전 0.2.0(변경 내역은 `CHANGELOG.md`)
 
 ## 설치
 
@@ -27,6 +28,14 @@ powershell -File scripts/install.ps1 -Target D:\path\to\skills\project-plan
 
 `skills/project-plan/` 폴더를 Codex skills 디렉터리로 직접 복사해도 됩니다.
 
+### 수동 설정(skill 없이)
+
+skill이 실행되지 않거나 agent에게 맡기고 싶지 않다면 다음 세 단계로 초기화합니다.
+
+1. `skills/project-plan/references/PLAN-template.md`를 프로젝트 루트의 `PLAN.md`로 복사하고 내용을 채웁니다.
+2. `skills/project-plan/references/AGENTS-block.md`를 프로젝트의 `AGENTS.md` 끝에 추가합니다. 파일이 없으면 새로 만듭니다.
+3. `powershell -File skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md`를 실행합니다.
+
 ## 사용법
 
 ### 1. 프로젝트 초기화
@@ -43,7 +52,7 @@ skill은 다음 순서로 동작합니다.
 2. 목표, 완료 기준, 범위 밖 항목을 확인합니다. 대화에서 추론할 수 없을 때만 질문합니다.
 3. 프로젝트 루트에 `PLAN.md`를 작성합니다.
 4. `references/AGENTS-block.md`를 `AGENTS.md`의 마커 블록에 기록합니다. 기존 블록은 교체합니다.
-5. 섹션 구성, 진행 중 작업 수, 유효 줄 수를 검사합니다.
+5. skill에 포함된 `scripts/check-plan.ps1`을 새 `PLAN.md`에 대해 실행합니다.
 
 ### 2. 평소대로 작업
 
@@ -52,16 +61,34 @@ skill은 다음 순서로 동작합니다.
 ### 3. 계획 검사(선택)
 
 ```powershell
-powershell -File scripts/check-plan.ps1 -Path PLAN.md
+powershell -File skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md
 ```
 
 출력 예:
 
 ```text
-[OK] PLAN.md: 27/50 lines, in progress 1, todo 1
+[OK] PLAN.md: 29/50 lines, in progress 1, todo 1, warnings 0
 ```
 
-필수 섹션이 없거나, 목표가 비어 있거나, 진행 중 항목이 2개 이상이거나, 유효 줄 수가 50을 넘으면 종료 코드 `1`을 반환합니다.
+검사 항목은 다음과 같습니다.
+
+실패(종료 코드 `1`):
+
+- 필수 섹션 누락: 目标 / 非目标 / 进行中 / 待做 / 决策 / 坑
+- 같은 섹션 제목이 두 번 이상 나타남
+- 目标이 비어 있거나 플레이스홀더인 상태
+- 进行中에 미완료 작업이 2개 이상
+- 비어 있지 않은 줄이 50줄을 초과
+
+경고(종료 코드에 영향 없음):
+
+- 当前里程碑 없음
+- 进行中에 미완료 작업이 없거나 `- [x]`가 남아 있음
+- 待做에 `- [x]`가 남아 있음
+- 目标에 "验收" 또는 acceptance가 없음
+- 进行中 작업이 있는데 파일이 14일 이상 수정되지 않음(`-MaxAgeDays 0`으로 끌 수 있음)
+
+"有效行数"는 비어 있지 않은 줄 수를 뜻합니다.
 
 ## 프로젝트에 생성되는 파일
 
@@ -116,27 +143,30 @@ M2 사용자 인증
 | 규칙 | 값 |
 | --- | --- |
 | 작업 단위 | commit 하나 |
-| 진행 중 | 최대 1개 |
-| 파일 길이 | 유효 줄 50줄 이내 |
+| 진행 중 | 메인 브랜치에서 최대 1개 |
+| 파일 길이 | 비어 있지 않은 줄 50줄 이내 |
 | 결정 | 날짜와 이유 포함 |
 | 완료 작업 | 마일스톤당 한 줄로 보관 |
-| 계획과 git 불일치 | `git log` 우선 |
+| 한도 초과 | 마일스톤을 먼저 보관하고, 오래된 결정과 문제를 `docs/plan-archive.md`로 옮김 |
+| 브랜치 | 각 브랜치가 자기 「进行中」을 관리하고, 병합 시 메인 브랜치에서 1개로 수렴 |
+| 계획과 git 불일치 | 사실은 `git log`, 의도는 `PLAN.md`. 충돌은 사람이 확인 |
 
 ## 디렉터리 구조
 
 ```text
-skills/project-plan/SKILL.md                      초기화 절차
-skills/project-plan/references/PLAN-template.md   계획 템플릿
-skills/project-plan/references/AGENTS-block.md    AGENTS.md에 기록할 규칙 블록
-scripts/check-plan.ps1                            계획 검사
-scripts/install.ps1                               skill 설치
-.github/workflows/plan-check.yml                  CI: push와 pull request에서 검사
+skills/project-plan/SKILL.md                       초기화 절차
+skills/project-plan/references/PLAN-template.md    계획 템플릿
+skills/project-plan/references/AGENTS-block.md     AGENTS.md에 기록할 규칙 블록
+skills/project-plan/scripts/check-plan.ps1         계획 검사(skill에 포함)
+scripts/install.ps1                                skill 설치 및 삭제된 파일 정리
+.github/workflows/plan-check.yml                   CI: 계획 검사 + 미갱신 경고
+CHANGELOG.md                                       변경 내역
 ```
 
 ## FAQ
 
 **skill이 실행되지 않습니다.**
-skill은 설명으로 선택됩니다. "project-plan으로 계획 목록을 초기화해 줘"처럼 이름을 직접 지정하세요.
+skill은 설명으로 선택됩니다. "project-plan으로 계획 목록을 초기화해 줘"처럼 이름을 직접 지정하세요. 그래도 실행되지 않으면 위의 수동 설정을 사용하세요.
 
 **새 세션이 PLAN.md를 읽지 않습니다.**
 Codex 작업 디렉터리가 프로젝트 루트이거나 그 하위인지, `AGENTS.md`에 `<!-- project-plan:begin -->`과 `<!-- project-plan:end -->` 사이의 블록이 있는지 확인하세요. `~/.codex/AGENTS.md`에 다음 한 줄을 추가할 수도 있습니다.
@@ -152,7 +182,7 @@ Codex 작업 디렉터리가 프로젝트 루트이거나 그 하위인지, `AGE
 프로젝트 루트입니다. 저장소마다 하나씩 두고, 전역 위치에는 두지 마세요.
 
 **PLAN.md를 commit해야 하나요?**
-네. 프로젝트 상태의 일부이므로 코드와 같이 리뷰해야 합니다.
+네. 프로젝트 상태의 일부이므로 코드와 같이 리뷰해야 합니다. 공개 저장소에서는 계획 내용도 공개 이력에 남습니다. 원하지 않으면 비공개 저장소를 쓰거나 `PLAN.md`를 `.gitignore`에 추가하세요(이 경우 세션 간 상태는 로컬에만 남습니다).
 
 **여러 프로젝트가 하나의 계획을 공유할 수 있나요?**
 아니요. 프로젝트 루트마다 별도 파일입니다.

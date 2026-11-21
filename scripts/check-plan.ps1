@@ -59,28 +59,28 @@ function Get-SectionLines {
 $problems = New-Object System.Collections.Generic.List[string]
 
 foreach ($name in @('目标', '进行中', '待做', '决策', '坑')) {
-    if (-not $sections.ContainsKey($name)) { $problems.Add("缺少章节：## $name") }
+    if (-not $sections.ContainsKey($name)) { $problems.Add("Missing section: ## $name") }
 }
 
 $goalLines = @(Get-SectionLines '目标' | Where-Object { $_.Trim() -ne '' })
 $goal = ($goalLines -join ' ').Trim()
 if ($goal -eq '' -or $goal -match '^<.*>$') {
-    $problems.Add('「目标」为空或仍是占位符')
+    $problems.Add('Section 目标 is empty or still a placeholder')
 }
 
 $doing = @(Get-SectionLines '进行中' | Where-Object { $_ -match '^\s*-\s\[ \]' })
 $todo = @(Get-SectionLines '待做' | Where-Object { $_ -match '^\s*-\s\[ \]' })
 
 if ($doing.Count -gt 1) {
-    $problems.Add("「进行中」有 $($doing.Count) 条，最多允许 1 条")
+    $problems.Add("Section 进行中 has $($doing.Count) items; at most 1 allowed")
 }
 if ($doing.Count -eq 0) {
-    Write-Host '[WARN] 「进行中」为空：确认是否真的没有在做的任务' -ForegroundColor Yellow
+    Write-Host '[WARN] Section 进行中 is empty; confirm no task is in progress' -ForegroundColor Yellow
 }
 
 $effective = @($lines | Where-Object { $_.Trim() -ne '' }).Count
 if ($effective -gt $MaxLines) {
-    $problems.Add("有效行数 $effective 超过上限 $MaxLines，请归档旧里程碑")
+    $problems.Add("Effective lines $effective exceed the limit of $MaxLines; archive an old milestone")
 }
 
 if ($problems.Count -gt 0) {
@@ -90,5 +90,5 @@ if ($problems.Count -gt 0) {
     exit 1
 }
 
-Write-Host ("[OK] {0}：有效行 {1}/{2}，进行中 {3}，待做 {4}" -f (Split-Path -Leaf $Path), $effective, $MaxLines, $doing.Count, $todo.Count) -ForegroundColor Green
+Write-Host ("[OK] {0}: {1}/{2} lines, in progress {3}, todo {4}" -f (Split-Path -Leaf $Path), $effective, $MaxLines, $doing.Count, $todo.Count) -ForegroundColor Green
 exit 0

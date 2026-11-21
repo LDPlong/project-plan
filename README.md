@@ -1,36 +1,17 @@
 # project-plan
 
-> One-shot Codex skill: bootstrap a `PLAN.md`, inject always-on rules into your repo's `AGENTS.md`, then get out of the way.
+[简体中文](README.md) · [English](docs/i18n/README.en.md) · [日本語](docs/i18n/README.ja.md) · [한국어](docs/i18n/README.ko.md) · [Español](docs/i18n/README.es.md) · [Português (BR)](docs/i18n/README.pt-BR.md)
 
-一次性脚手架：项目建立时装一次，之后靠项目里的 `AGENTS.md` + `PLAN.md` 运转，**不再调用 skill**。
+一个用于跨会话保存项目状态的 Codex skill。它只在项目建立时运行一次：生成 `PLAN.md`，并把规则块写入仓库的 `AGENTS.md`。之后的会话按 `AGENTS.md` 执行，不再调用这个 skill。
 
-`git log` 记改了什么，`PLAN.md` 记目标、为什么、下一步和坑。
+`git log` 记录代码改了什么，`PLAN.md` 记录目标、决策理由、当前任务和已踩过的坑。
 
-## 它解决什么
+## 运行要求
 
-- **换对话就失忆**：新开一个会话，模型不知道做到哪了。
-- **计划漂移**：没有一个稳定的地方写“为什么这么定”，每次都要重新解释。
-- **规则常驻**：要么每轮都靠模型想起来调用 skill，要么把规则写进项目里。
+- 支持 `AGENTS.md` 的 Codex（桌面端或 CLI）
+- PowerShell 5.1 及以上（仅脚本需要）
 
-答案是后者：规则只写一次，存进仓库，跟着代码一起版本化。
-
-## 机制
-
-```mermaid
-flowchart LR
-  A["项目刚定目标"] --> B["project-plan skill 跑一次"]
-  B --> C["PLAN.md<br/>目标 / 进行中 / 决策 / 坑"]
-  B --> D["AGENTS.md<br/>注入规则块"]
-  C --> E["之后每轮对话"]
-  D --> E
-  E --> F["更新 PLAN.md<br/>与代码同一个 commit"]
-```
-
-只有两个东西留在项目里：`PLAN.md` 和 `AGENTS.md` 里的标记块。没有守护进程、没有配置、没有额外依赖。
-
-## 快速开始
-
-**1. 安装 skill**
+## 安装
 
 ```powershell
 git clone https://github.com/LDPlong/project-plan.git
@@ -38,56 +19,149 @@ cd project-plan
 powershell -File scripts/install.ps1
 ```
 
-安装到 `~/.codex/skills/project-plan`，或者手动复制 `skills/project-plan/` 到你的 skills 目录。
+默认安装到 `~/.codex/skills/project-plan`。安装到其他位置：
 
-**2. 每个新项目用一次**
+```powershell
+powershell -File scripts/install.ps1 -Target D:\path\to\skills\project-plan
+```
 
-项目刚定目标时，对这个项目说：
+也可以手动把 `skills/project-plan/` 复制到 Codex 的 skills 目录。
+
+## 使用
+
+### 1. 初始化项目
+
+在项目根目录打开 Codex，发送：
 
 ```text
 用 project-plan 初始化这个项目的计划清单
 ```
 
-skill 会：写 `PLAN.md`（目标 / 验收标准 / 非目标 / 任务）→ 把规则块注入仓库 `AGENTS.md`（带 begin/end 标记，可重复执行）→ 自查章节、「进行中」数量、总行数。
+skill 依次执行：
 
-**3. 之后什么都不用做**
+1. 检查 `PLAN.md` 和 `AGENTS.md` 规则块是否已存在，都存在则停止。
+2. 确认目标、验收标准和非目标；无法从对话中推断时才提问。
+3. 在项目根目录生成 `PLAN.md`。
+4. 把 `references/AGENTS-block.md` 写入 `AGENTS.md` 的标记块；已有块则整块替换。
+5. 自查章节、进行中任务数量和有效行数。
 
-任务开始前读清单、完成后更新、记录决策和坑，全部由 `AGENTS.md` 里的规则负责。
+### 2. 正常工作
 
-## 仓库结构
+会话开始时，Codex 读取 `PLAN.md` 并从「进行中」继续。任务完成后更新清单，与代码放在同一个 commit。后续不需要再调用 skill。
 
-```
-skills/project-plan/SKILL.md                     脚手架流程（只在建项目时用）
-skills/project-plan/references/PLAN-template.md  清单模板
-skills/project-plan/references/AGENTS-block.md   注入 AGENTS.md 的规则块
-scripts/check-plan.ps1                           可选自检工具
-scripts/install.ps1                              安装到 ~/.codex/skills
-AGENTS.md                                        本仓库自己的规则（含注入块，dogfooding）
-PLAN.md                                          本仓库自己的清单
-```
-
-## 可选：清单自检
+### 3. 检查清单（可选）
 
 ```powershell
 powershell -File scripts/check-plan.ps1 -Path PLAN.md
 ```
 
-检查四项：必备章节齐全、「目标」非空、「进行中」≤1 条、有效行数 ≤50。CI 里也会跑一次（见 `.github/workflows/plan-check.yml`）。
+输出示例：
 
-## 设计取舍
+```text
+[OK] PLAN.md: 27/50 lines, in progress 1, todo 1
+```
 
-- **状态放文件，不放模型记忆**：新对话读文件是唯一可靠的恢复方式。
-- **触发靠 `AGENTS.md`，不靠 skill**：常驻指令比按需匹配可靠；skill 只在初始化时用一次。
-- **注入块必须自包含**：不能引用 skill 里的内容，否则未来对话读不到。
-- **只记 git 记不住的**：目标、理由、坑、下一步；代码改动一律不抄。
-- **一份 `PLAN.md` 只放项目根目录**，50 行封顶，超了就归档旧里程碑。
-- **全局只留一行兜底**：可在 `~/.codex/AGENTS.md` 加一句“存在 PLAN.md 就先读”，覆盖没初始化的存量仓库；完整协议仍只在项目块里。
+缺少章节、目标为空、进行中超过 1 条、有效行数超过 50 时，脚本返回退出码 `1`。
 
-## 兼容性
+## 项目中生成的文件
 
-- Codex（桌面端 / CLI），依赖 `AGENTS.md` 机制。
-- 脚本需要 PowerShell 5.1+ 或 PowerShell 7+；CI 使用 GitHub Actions 的 `pwsh`。
-- 清单是纯 Markdown，git 之外的场景也能用。
+| 文件 | 内容 |
+| --- | --- |
+| `PLAN.md` | 目标、范围、当前里程碑、任务、决策、坑 |
+| `AGENTS.md` | 原有内容 + 一个带标记的规则块 |
+
+`PLAN.md` 的章节名固定为中文，不要翻译，否则检查脚本和规则块无法匹配。
+
+| 章节 | 内容 |
+| --- | --- |
+| `## 目标` | 一句话目标，包含验收方式 |
+| `## 非目标` | 明确不做的事 |
+| `## 当前里程碑` | 当前阶段名称 |
+| `## 进行中` | 最多 1 条任务 |
+| `## 待做` | 后续任务 |
+| `## 决策` | 日期 + 结论 + 理由 |
+| `## 坑` | 现象 → 原因 → 解法 |
+| `## 归档` | 已完成里程碑，一行一个 |
+
+示例：
+
+```markdown
+## 目标
+支持邮箱登录；验收：新用户 3 分钟内完成注册并登录。
+
+## 非目标
+- 暂不支持第三方登录
+
+## 当前里程碑
+M2 用户认证
+
+## 进行中
+- [ ] T3 登录接口（JWT 签发 + 刷新）
+
+## 待做
+- [ ] T4 密码重置（依赖邮件服务）
+
+## 决策
+- 2026-11-21 用 JWT 不引 session：目标是无状态部署
+
+## 坑
+- prisma migrate 必须先起本地 PG：否则报 P1001
+
+## 归档
+- M1 骨架搭建 已完成（T1-T2，见 git log）
+```
+
+## 清单规则
+
+| 规则 | 取值 |
+| --- | --- |
+| 任务粒度 | 一条 commit |
+| 进行中 | 最多 1 条 |
+| 文件长度 | 有效行数不超过 50 |
+| 决策 | 带日期和理由 |
+| 已完成任务 | 每个里程碑折成一行归档 |
+| 清单与 git 冲突 | 以 `git log` 为准 |
+
+## 目录结构
+
+```text
+skills/project-plan/SKILL.md                      初始化流程
+skills/project-plan/references/PLAN-template.md   清单模板
+skills/project-plan/references/AGENTS-block.md    写入 AGENTS.md 的规则块
+scripts/check-plan.ps1                            清单检查
+scripts/install.ps1                               安装 skill
+.github/workflows/plan-check.yml                  CI：push / PR 时运行检查
+```
+
+## 常见问题
+
+**skill 没有触发怎么办？**
+skill 按描述匹配。直接点名：「用 project-plan 初始化这个项目的计划清单」。
+
+**新会话没有读取 PLAN.md？**
+确认 Codex 的工作目录在项目根目录或其子目录，并检查 `AGENTS.md` 中是否存在 `<!-- project-plan:begin -->` 和 `<!-- project-plan:end -->` 之间的规则块。也可以在 `~/.codex/AGENTS.md` 加一行兜底：
+
+```markdown
+- 若当前工作目录或任一上级目录存在 `PLAN.md`，任务开始前先读它的「目标 / 进行中 / 决策 / 坑」；不存在则忽略此条。
+```
+
+**项目里已经有 AGENTS.md 会不会冲突？**
+不会。规则块追加在文件末尾，其他内容保持不变；重复执行只替换标记块内的内容。
+
+**PLAN.md 应该放在哪里？**
+项目根目录，一个仓库一份，不要放到全局目录。
+
+**PLAN.md 需要提交吗？**
+需要。它属于项目状态，应该和代码一样被 review。
+
+**多个项目可以共用一份清单吗？**
+不可以。每个项目根目录各自一份。
+
+## 卸载
+
+1. 删除 `~/.codex/skills/project-plan`。
+2. 删除 `AGENTS.md` 中两个标记之间的规则块。
+3. 如不再需要，删除 `PLAN.md`。
 
 ## License
 

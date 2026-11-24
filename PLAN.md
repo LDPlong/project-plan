@@ -39,3 +39,4 @@ M3 验证与试用
 - M2 一次性脚手架与开源发布 已完成（T9，见 https://github.com/LDPlong/project-plan）
 - 文档本地化 已完成（T10：README 说明书化 + en/ja/ko/es/pt-BR）
 - 评估修复 已完成（T11-T14：校验增强、协议补齐、手动初始化、脚本分发）
+- 自检脚本 已完成（T15：verify-skill.ps1，15 个正反例，已接入 CI）

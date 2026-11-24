@@ -15,6 +15,9 @@ jobs:
       - name: Validate PLAN.md
         shell: pwsh
         run: ./skills/project-plan/scripts/check-plan.ps1 -Path PLAN.md
+      - name: Run skill self-tests
+        shell: pwsh
+        run: ./scripts/verify-skill.ps1
       - name: Warn when code changed without a plan update
         if: github.event_name == 'pull_request'
         shell: bash

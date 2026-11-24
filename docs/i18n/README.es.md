@@ -159,6 +159,7 @@ skills/project-plan/references/PLAN-template.md    Plantilla del plan
 skills/project-plan/references/AGENTS-block.md     Bloque de reglas para AGENTS.md
 skills/project-plan/scripts/check-plan.ps1         Comprobación del plan (incluida en el skill)
 scripts/install.ps1                                Instalación y limpieza de archivos eliminados
+scripts/verify-skill.ps1                           Autoprueba del verificador (15 casos)
 .github/workflows/plan-check.yml                   CI: comprobación + aviso de plan sin actualizar
 CHANGELOG.md                                       Historial de versiones
 ```

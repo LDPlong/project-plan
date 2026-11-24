@@ -159,6 +159,7 @@ skills/project-plan/references/PLAN-template.md    계획 템플릿
 skills/project-plan/references/AGENTS-block.md     AGENTS.md에 기록할 규칙 블록
 skills/project-plan/scripts/check-plan.ps1         계획 검사(skill에 포함)
 scripts/install.ps1                                skill 설치 및 삭제된 파일 정리
+scripts/verify-skill.ps1                           검사 스크립트 자체 테스트(15개 케이스)
 .github/workflows/plan-check.yml                   CI: 계획 검사 + 미갱신 경고
 CHANGELOG.md                                       변경 내역
 ```

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 - 2026-11-24
+
+### Added
+
+- `scripts/verify-skill.ps1`：15 个正反例一次性验证 `check-plan.ps1`
+- CI 增加自检步骤（`Run skill self-tests`）
 ## 0.2.0 - 2026-11-21
 
 ### Added

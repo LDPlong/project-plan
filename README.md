@@ -159,6 +159,7 @@ skills/project-plan/references/PLAN-template.md     清单模板
 skills/project-plan/references/AGENTS-block.md      写入 AGENTS.md 的规则块
 skills/project-plan/scripts/check-plan.ps1          清单检查（随 skill 分发）
 scripts/install.ps1                                 安装 skill，并清理已删除文件
+scripts/verify-skill.ps1                            自检脚本（15 个正反例）
 .github/workflows/plan-check.yml                    CI：清单检查 + 未更新告警
 CHANGELOG.md                                        版本记录
 ```

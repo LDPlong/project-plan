@@ -159,6 +159,7 @@ skills/project-plan/references/PLAN-template.md     Plan template
 skills/project-plan/references/AGENTS-block.md      Rule block for AGENTS.md
 skills/project-plan/scripts/check-plan.ps1          Plan checker (installed with the skill)
 scripts/install.ps1                                 Skill installer, cleans removed files
+scripts/verify-skill.ps1                            Self-test for the checker (15 cases)
 .github/workflows/plan-check.yml                    CI: plan check + missing-update warning
 CHANGELOG.md                                        Version history
 ```

@@ -159,6 +159,7 @@ skills/project-plan/references/PLAN-template.md    計画テンプレート
 skills/project-plan/references/AGENTS-block.md     AGENTS.md に書き込むルールブロック
 skills/project-plan/scripts/check-plan.ps1         計画の検査（skill に同梱）
 scripts/install.ps1                                skill のインストールと不要ファイルの削除
+scripts/verify-skill.ps1                           検査スクリプトの自己テスト（15 ケース）
 .github/workflows/plan-check.yml                   CI：計画検査 + 未更新の警告
 CHANGELOG.md                                       変更履歴
 ```
